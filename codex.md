@@ -94,13 +94,49 @@
 - 当前我们已改为 `P2` 四头结构，与官方常见 `P3/P4/P5` 三头结构不完全一致，因此是“部分权重加载 + 新增层随机初始化”，不是严格意义的断点续训。
 - 若要“严格续训（resume）”，需使用完全相同结构并加载你自己上一次训练生成的 `last.pt`。
 
+## SAM分割路线可行性（2026-03-30）
+- 可以使用 `SAM`，并且该仓库已内置相关能力，不需要额外改框架主代码。
+- 可用入口：
+- `ultralytics/data/annotator.py` 的 `auto_annotate()`：用检测模型框出目标，再用 `SAM` 生成分割轮廓并导出 YOLO 分割标签。
+- `ultralytics/data/converter.py` 的 `yolo_bbox2segment()`：将现有检测数据批量转换为分割标签。
+- 分割训练模型已提供：
+- `ultralytics/cfg/models/master/v0_1/seg/yolo-master-seg-m.yaml`（以及 n/s/l/x 变体）。
+
+### 推荐落地流程
+1. 先用你已训练好的检测权重 + `SAM` 自动生成初始 mask 标签。
+2. 对裂缝、孔洞等关键类别进行人工抽检和修正。
+3. 使用 `yolo-master-seg-m.yaml` 在分割数据上训练，输出实例 mask。
+4. 保留检测模型作为候选分支，与分割模型对比速度与精度后再定最终部署方案。
+
+## 本轮已落地（SAM自动标注 + 分割训练）
+1. 新增 SAM 自动标注脚本：
+- `auto_annotate_sam.py`
+- 读取 `GZ-DET.yaml` 的 `train/val` 路径，自动定位图片目录和标签目录。
+- 调用 `auto_annotate()`（检测模型 + SAM）生成 YOLO 分割标签。
+- 默认行为：先备份原检测标签，再清空旧标签并写入新的分割标签。
+
+2. 新增分割训练脚本：
+- `train_seg.py`
+- 使用 `ultralytics/cfg/models/master/v0_1/seg/yolo-master-seg-m.yaml`
+- 默认 `imgsz=960`，可切换 `1280`
+- 若存在 `runs/gyu_det/p2_imgsz960/weights/best.pt`，会优先用于初始化权重。
+
+3. 新增分割数据配置：
+- `GZ-DET-seg.yaml`
+- 与检测数据同路径同类别定义，用于分割训练入口。
+
+4. 校验结果：
+- `python -m py_compile auto_annotate_sam.py train_seg.py` 通过（语法级校验通过）。
+
 ## 下一小阶段计划
-1. 安装并校验训练依赖（至少 `opencv-python`），完成新模型可执行性验证。
-2. 启动 `P2 + imgsz=960` 首轮训练，记录基础指标。
-3. 使用 `predict_sahi.py` 验证切片推理对小目标召回的提升。
-4. 根据显存余量评估是否升级到 `imgsz=1280`。
+1. 在训练环境执行 `auto_annotate_sam.py`，生成分割标签并完成质量抽检。
+2. 启动 `train_seg.py` 完成首轮分割训练，输出 mask 指标。
+3. 评估 `imgsz=960` 与 `imgsz=1280` 的精度/速度权衡。
+4. 若细长裂缝边界仍不理想，继续优化 SAM 提示策略或补充人工精修样本。
 
 ## 变更记录
 - 2026-03-30：初始化 `codex.md`，记录项目目标、当前配置、风险和下一步计划。
 - 2026-03-30：补充桥梁病害优化思路，明确结构优化、数据增强和后续实验优先级。
 - 2026-03-30：落地 `P2` 专用检测模型、提升训练分辨率配置，并新增 `Sparse SAHI` 切片推理脚本。
+- 2026-03-30：确认 `SAM` 分割路线可行，补充分割自动标注与训练的落地流程。
+- 2026-03-30：新增 `auto_annotate_sam.py`、`train_seg.py`、`GZ-DET-seg.yaml`，形成检测到分割的可执行闭环。

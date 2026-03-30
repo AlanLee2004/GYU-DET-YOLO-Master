@@ -1,0 +1,11 @@
+# GZ-DET segmentation
+train: /root/autodl-fs/GYU-DET/train
+val: /root/autodl-fs/GYU-DET/valid
+
+names:
+  0: Crack
+  1: Breakage
+  2: Comb
+  3: Hole
+  4: Reinforcement
+  5: Seepage
