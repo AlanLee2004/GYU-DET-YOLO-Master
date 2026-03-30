@@ -128,11 +128,26 @@
 4. 校验结果：
 - `python -m py_compile auto_annotate_sam.py train_seg.py` 通过（语法级校验通过）。
 
+## 显存不足处理（2026-03-30）
+- 问题：`TRAIN_IMGSZ=960` 在当前显存条件下训练失败。
+- 已调整为低显存稳跑配置：
+- `train.py`：`TRAIN_IMGSZ=640`、`batch=-1`（AutoBatch），实验名改为 `p2_imgsz640_autobatch`。
+- `train_seg.py`：`TRAIN_IMGSZ=640`、`batch=-1`（AutoBatch），实验名改为 `seg_m_imgsz640_autobatch`。
+- 分割初始化权重改为候选自动匹配：
+- 优先读取 `runs/gyu_det/p2_imgsz640_autobatch/weights/best.pt`
+- 若不存在则回退 `runs/gyu_det/p2_imgsz960/weights/best.pt`
+
+## moe_loss为0问题定位（2026-03-30）
+- 现象：训练日志中 `moe_loss` 持续为 `0`。
+- 根因：`OptimizedMOEImproved` 在 forward 中已计算并写入 `MOE_LOSS_REGISTRY`，但类本身缺少 `aux_loss` 属性，导致 `ultralytics/utils/loss.py` 的聚合逻辑无法读取该模块的 MoE 辅助损失。
+- 修复：在 `ultralytics/nn/modules/moe/modules.py` 为 `OptimizedMOEImproved` 添加 `aux_loss` property（从 `MOE_LOSS_REGISTRY` 读取，默认返回同设备 0 张量）。
+- 校验：`python -m py_compile ultralytics/nn/modules/moe/modules.py ultralytics/utils/loss.py` 通过。
+
 ## 下一小阶段计划
-1. 在训练环境执行 `auto_annotate_sam.py`，生成分割标签并完成质量抽检。
-2. 启动 `train_seg.py` 完成首轮分割训练，输出 mask 指标。
-3. 评估 `imgsz=960` 与 `imgsz=1280` 的精度/速度权衡。
-4. 若细长裂缝边界仍不理想，继续优化 SAM 提示策略或补充人工精修样本。
+1. 重新启动训练并观察 `moe_loss` 是否变为非零（前几个 iteration 即可确认）。
+2. 跑通 `imgsz=640 + AutoBatch` 检测基线后，再执行 SAM 自动标注与分割训练。
+3. 记录 `moe_loss`、`box/cls/dfl` 曲线，评估 MoE 正则是否稳定。
+4. 若显存仍有余量，再逐步提升到 `imgsz=768` 做二次对比。
 
 ## 变更记录
 - 2026-03-30：初始化 `codex.md`，记录项目目标、当前配置、风险和下一步计划。
@@ -140,3 +155,5 @@
 - 2026-03-30：落地 `P2` 专用检测模型、提升训练分辨率配置，并新增 `Sparse SAHI` 切片推理脚本。
 - 2026-03-30：确认 `SAM` 分割路线可行，补充分割自动标注与训练的落地流程。
 - 2026-03-30：新增 `auto_annotate_sam.py`、`train_seg.py`、`GZ-DET-seg.yaml`，形成检测到分割的可执行闭环。
+- 2026-03-30：针对显存不足将检测与分割训练下调至 `imgsz=640` 并启用 `AutoBatch`。
+- 2026-03-30：修复 `OptimizedMOEImproved` 缺少 `aux_loss` 属性导致 `moe_loss` 始终为 0 的问题。

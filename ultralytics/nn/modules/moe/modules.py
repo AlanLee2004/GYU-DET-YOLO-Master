@@ -802,6 +802,12 @@ class OptimizedMOEImproved(nn.Module):
 
         return final_output
 
+    @property
+    def aux_loss(self):
+        """Expose auxiliary MoE loss for global loss aggregation."""
+        default = torch.tensor(0.0, device=next(self.parameters()).device)
+        return MOE_LOSS_REGISTRY.get(self, default)
+
 
 class ABlockMoE(ABlock):
     """Area-attention block module with MoE-FFN for efficient feature extraction."""
