@@ -143,6 +143,39 @@
 - 修复：在 `ultralytics/nn/modules/moe/modules.py` 为 `OptimizedMOEImproved` 添加 `aux_loss` property（从 `MOE_LOSS_REGISTRY` 读取，默认返回同设备 0 张量）。
 - 校验：`python -m py_compile ultralytics/nn/modules/moe/modules.py ultralytics/utils/loss.py` 通过。
 
+## 路线文档产出（2026-03-31）
+- 已新增 `path.md`，对桥梁病害项目整体技术路线进行统一梳理。
+- 内容覆盖：检测主线、分割主线、MoE稳定性修复、数据增强策略、实验推进顺序与最终交付形态。
+
+## 本轮已落地（桥下光照与运动模糊增强，2026-03-31）
+1. 检测训练脚本增强（`train.py`）
+- 增加桥梁场景定制在线增强：`MotionBlur/Blur/MedianBlur`、`CLAHE`、`RandomBrightnessContrast`、`RandomGamma`、`GaussNoise/ImageCompression`、`Sharpen`。
+- 增强策略改为“几何保守 + 光照/退化增强优先”：
+- 几何参数收敛：`degrees=0.0`、`translate=0.06`、`scale=0.25`、`perspective=0.0`。
+- 颜色/亮度增强：`hsv_h=0.012`、`hsv_s=0.55`、`hsv_v=0.35`。
+- 混合增强：`mosaic=0.80`、`mixup=0.05`、`close_mosaic=15`。
+- 训练实验名更新为：`p2_imgsz640_autobatch_bridge_aug`。
+- 数据集配置自动切换：若存在 `GZ-DET-enhanced.yaml`，`train.py` 将优先使用增强后数据；否则回退 `GZ-DET.yaml`。
+- 兼容性处理：若环境未安装 `albumentations`，会自动回退到默认增强并给出警告，不阻断训练。
+
+2. 新增离线预处理脚本（`scripts/preprocess_bridge_dataset.py`）
+- 目标：在训练前先做图像质量统一，缓解桥下光照不均和部分运动模糊样本问题。
+- 处理流程：
+- `CLAHE(L通道)`：提升阴影细节与局部对比度。
+- `自适应Gamma`：按图像平均亮度自动校正曝光分布。
+- `轻度去模糊`：基于 `Laplacian` 清晰度阈值，仅对低清晰度图像触发反锐化（Unsharp Mask）。
+- 支持从 `GZ-DET.yaml` 读取 `train/val/test`，输出增强后的数据目录与新的 YAML（默认 `GZ-DET-enhanced.yaml`）。
+- 标签处理：保持标注不变并复制到输出目录，保证可直接用于 YOLO 训练。
+
+3. 语法校验
+- 已执行：`python -m py_compile train.py scripts/preprocess_bridge_dataset.py`
+- 结果：通过。
+
+4. 可用性修正
+- `scripts/preprocess_bridge_dataset.py` 已改为 `cv2` 按需导入：
+- `--help` 可在未安装 `opencv-python` 时正常查看。
+- 真正执行预处理时若缺少 `cv2`，会提示：`pip install opencv-python`。
+
 ## 下一小阶段计划
 1. 重新启动训练并观察 `moe_loss` 是否变为非零（前几个 iteration 即可确认）。
 2. 跑通 `imgsz=640 + AutoBatch` 检测基线后，再执行 SAM 自动标注与分割训练。
@@ -157,3 +190,7 @@
 - 2026-03-30：新增 `auto_annotate_sam.py`、`train_seg.py`、`GZ-DET-seg.yaml`，形成检测到分割的可执行闭环。
 - 2026-03-30：针对显存不足将检测与分割训练下调至 `imgsz=640` 并启用 `AutoBatch`。
 - 2026-03-30：修复 `OptimizedMOEImproved` 缺少 `aux_loss` 属性导致 `moe_loss` 始终为 0 的问题。
+- 2026-03-31：新增 `path.md`，形成项目整体技术路线文档。
+- 2026-03-31：落地桥梁场景数据增强与预处理，新增 `train.py` 定制增强和 `scripts/preprocess_bridge_dataset.py` 离线处理脚本。
+- 2026-03-31：修正预处理脚本运行体验，改为 `cv2` 按需导入并增加缺依赖提示。
+- 2026-03-31：`train.py` 新增增强数据 YAML 自动优先切换逻辑（增强版存在则自动使用）。
