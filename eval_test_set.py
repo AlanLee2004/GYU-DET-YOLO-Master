@@ -16,13 +16,11 @@ if str(ROOT) not in sys.path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate detection and segmentation models on the test split and save a unified metrics summary."
+        description="Evaluate detection model on the target split and save metrics summary."
     )
     parser.add_argument("--split", type=str, default="test", help="Dataset split to evaluate, e.g. test/val.")
-    parser.add_argument("--det-model", type=str, default="", help="Detection model path (.pt).")
+    parser.add_argument("--det-model", type=str, required=True, help="Detection model path (.pt).")
     parser.add_argument("--det-data", type=Path, default=Path("GZ-DET.yaml"), help="Detection data YAML.")
-    parser.add_argument("--seg-model", type=str, default="", help="Segmentation model path (.pt).")
-    parser.add_argument("--seg-data", type=Path, default=Path("GZ-DET-seg.yaml"), help="Segmentation data YAML.")
     parser.add_argument("--imgsz", type=int, default=640, help="Validation image size.")
     parser.add_argument("--batch", type=int, default=1, help="Validation batch size.")
     parser.add_argument("--device", type=str, default="", help="Device, e.g. 0 or cpu.")
@@ -87,42 +85,8 @@ def run_detection(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def run_segmentation(args: argparse.Namespace) -> dict[str, Any]:
-    try:
-        from ultralytics import YOLO
-    except Exception as e:
-        raise RuntimeError("Failed to import ultralytics for segmentation eval. Ensure OpenCV is installed.") from e
-    ensure_split_exists(args.seg_data, args.split)
-    model = YOLO(args.seg_model)
-    metrics = model.val(
-        data=str(args.seg_data),
-        split=args.split,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=args.device or None,
-        workers=args.workers,
-        conf=args.conf,
-        iou=args.iou,
-        project=str(args.project),
-        name=f"{args.name}_seg",
-        exist_ok=True,
-        plots=args.plots,
-        save_json=args.save_json,
-        verbose=True,
-    )
-    return {
-        "model": args.seg_model,
-        "data_yaml": str(args.seg_data),
-        "save_dir": str(metrics.save_dir),
-        "metrics": normalize_scalars(metrics.results_dict),
-        "speed_ms": normalize_scalars(metrics.speed),
-    }
-
-
 def main() -> None:
     args = parse_args()
-    if not args.det_model and not args.seg_model:
-        raise ValueError("At least one model must be provided: --det-model and/or --seg-model.")
 
     output_root = args.project / args.name
     output_root.mkdir(parents=True, exist_ok=True)
@@ -130,17 +94,21 @@ def main() -> None:
     summary: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "split": args.split,
+        "task": "detect",
     }
 
-    if args.det_model:
-        summary["detection"] = run_detection(args)
-    if args.seg_model:
-        summary["segmentation"] = run_segmentation(args)
+    summary["detection"] = run_detection(args)
 
     summary_path = output_root / "metrics_summary.json"
     with summary_path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
+    det_metrics = summary["detection"]["metrics"]
+    print("[METRICS] Detection")
+    print(f"  precision(B): {det_metrics.get('metrics/precision(B)', 'N/A')}")
+    print(f"  recall(B): {det_metrics.get('metrics/recall(B)', 'N/A')}")
+    print(f"  mAP50(B): {det_metrics.get('metrics/mAP50(B)', 'N/A')}")
+    print(f"  mAP50-95(B): {det_metrics.get('metrics/mAP50-95(B)', 'N/A')}")
     print(f"[DONE] Saved summary: {summary_path.resolve()}")
 
 

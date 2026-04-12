@@ -327,3 +327,24 @@
 
 3. 校验：
 - 已执行 `python -m py_compile app_cn_det_seg.py`，通过。
+
+## 本轮已落地（eval_test_set仅检测评估，2026-04-12）
+1. `scripts/eval_test_set.py` 已精简为仅目标检测评估：
+- 删除分割相关参数：`--seg-model`、`--seg-data`。
+- 删除分割评估逻辑，仅保留 `run_detection()`。
+- `--det-model` 改为必填参数（`required=True`）。
+
+2. 输出能力增强：
+- 终端直接输出关键检测指标：
+  - `metrics/precision(B)`
+  - `metrics/recall(B)`
+  - `metrics/mAP50(B)`
+  - `metrics/mAP50-95(B)`
+- 同时保留汇总 JSON 输出：`runs/gyu_eval/<name>/metrics_summary.json`。
+
+3. 校验：
+- 已执行 `python -m py_compile scripts/eval_test_set.py`，通过。
+- 已执行 `python scripts/eval_test_set.py --help`，确认仅检测参数。
+
+## 变更记录（增量）
+- 2026-04-12：`scripts/eval_test_set.py` 调整为仅检测评估脚本，并增加终端关键指标打印。
