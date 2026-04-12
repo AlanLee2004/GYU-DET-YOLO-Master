@@ -194,3 +194,32 @@
 - 2026-03-31：落地桥梁场景数据增强与预处理，新增 `train.py` 定制增强和 `scripts/preprocess_bridge_dataset.py` 离线处理脚本。
 - 2026-03-31：修正预处理脚本运行体验，改为 `cv2` 按需导入并增加缺依赖提示。
 - 2026-03-31：`train.py` 新增增强数据 YAML 自动优先切换逻辑（增强版存在则自动使用）。
+- 2026-04-09：`auto_annotate_sam.py` 改为直接使用训练集现有 YOLO 检测框标签做 SAM 分割，不再依赖新训练检测模型推理框。
+- 2026-04-11：修复验证集分割未生成问题：移除 `yolo_bbox2segment()` 的提前退出路径，改为逐图像强制按现有检测框执行 SAM 分割，并兼容 `val/valid` 键名。
+
+## 本轮已落地（使用已有YOLO框标签进行SAM分割，2026-04-09）
+1. `auto_annotate_sam.py` 逻辑已由“`det_model + SAM` 自动检测分割”切换为“读取现有检测标签 + SAM 分割”：
+- 删除 `DET_MODEL`、`conf/iou/imgsz/max_det` 等检测推理参数。
+- 新增调用 `ultralytics.data.converter.yolo_bbox2segment()`，直接基于标签框生成分割标签。
+
+2. 标签安全替换流程：
+- 先备份原检测标签到 `labels_bbox_backup`（若不存在则创建）。
+- SAM 结果先写入临时目录 `labels_sam_tmp`，避免覆盖读取中的原标签。
+- 生成成功后清空旧检测标签，并用分割标签替换；默认行为由 `REPLACE_LABELS_WITH_SEG=True` 控制。
+
+3. 校验：
+- 已执行 `python -m py_compile auto_annotate_sam.py`，语法通过。
+
+## 本轮已落地（修复valid验证集未分割，2026-04-11）
+1. `auto_annotate_sam.py` 核心转换逻辑调整：
+- 不再直接调用 `yolo_bbox2segment()`（该路径在检测到分割标签时会整分支提前返回）。
+- 新增 `force_bbox_to_segment()`：逐图像读取 YOLO 检测框，调用 `SAM` 生成分割并写入标签，避免 `valid` 被跳过。
+
+2. 数据集键名兼容：
+- 新增 `SPLIT_ALIASES`，验证集同时支持 `val` 和 `valid`（优先读取实际存在的键）。
+
+3. 输出与替换流程保持安全：
+- 仍先写入临时目录，再整体替换原标签，保留检测标签备份机制。
+
+4. 校验：
+- 已执行 `python -m py_compile auto_annotate_sam.py`，通过。
