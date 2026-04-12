@@ -1,6 +1,7 @@
 # GZ-DET segmentation
 train: /root/autodl-fs/GYU-DET/train
 val: /root/autodl-fs/GYU-DET/valid
+test: /root/autodl-fs/GYU-DET/test
 
 names:
   0: Crack

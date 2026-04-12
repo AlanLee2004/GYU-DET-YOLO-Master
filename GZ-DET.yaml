@@ -1,6 +1,7 @@
 # GZ-DET
 train: /root/autodl-fs/GYU-DET/train  # train images (relative to 'path') 128 images
 val: /root/autodl-fs/GYU-DET/valid # val images (relative to 'path') 128 images
+test: /root/autodl-fs/GYU-DET/test
 # Classes
 names:
   0: Crack
@@ -9,4 +10,3 @@ names:
   3: Hole
   4: Reinforcement
   5: Seepage
-

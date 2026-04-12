@@ -223,3 +223,107 @@
 
 4. 校验：
 - 已执行 `python -m py_compile auto_annotate_sam.py`，通过。
+
+## 本轮已落地（test集评估入口，2026-04-12）
+1. 数据集 YAML 增加 `test` 键：
+- `GZ-DET.yaml` 新增 `test: /root/autodl-fs/GYU-DET/test`
+- `GZ-DET-seg.yaml` 新增 `test: /root/autodl-fs/GYU-DET/test`
+
+2. 新增统一评估脚本：
+- `scripts/eval_test_set.py`
+- 支持一次命令同时评估检测模型与分割模型（`split=test`）。
+- 自动校验 YAML 是否定义目标 split，避免误跑到 `val`。
+- 导出统一汇总文件：`runs/gyu_eval/<name>/metrics_summary.json`
+- 汇总项包含：模型路径、数据 YAML、run 保存目录、核心 metrics 字典和速度统计。
+
+3. 校验：
+- 已执行 `python -m py_compile scripts/eval_test_set.py`，通过。
+- 兼容性修正：`scripts/eval_test_set.py` 改为 `ultralytics` 按需导入，并用 `PyYAML` 读取数据配置，确保在未安装 `cv2` 时也可正常执行 `--help`。
+
+## 下一小阶段计划（2026-04-12）
+1. 扩展 `app.py`：新增像素-物理系数输入与单位输入。
+2. 在分割结果上实现病害长度与最大宽度估计算法（优先骨架+距离变换，带回退策略）。
+3. 将测量结果写入前端表格并在摘要区展示，形成“上传一张图即完成检测+分割+尺寸估算”闭环。
+
+## 变更记录（增量）
+- 2026-04-12：`GZ-DET.yaml`、`GZ-DET-seg.yaml` 补充 `test` split 路径。
+- 2026-04-12：新增 `scripts/eval_test_set.py`，用于检测/分割 test 统一评估与 JSON 汇总导出。
+
+## 本轮已落地（前端测量能力，2026-04-12）
+1. 前端参数扩展（`app.py`）：
+- 新增像素到物理量换算输入：`Physical per Pixel`（例如 `0.2 mm/px`）。
+- 新增单位名称输入：`Unit Name`（如 `mm`、`cm`）。
+
+2. 分割尺寸估计算法（`app.py`）：
+- 新增 `_measure_mask_geometry()`，对每个实例 mask 估算：
+  - 面积：`Mask Area(px^2)`
+  - 长度：`Length(px)`
+  - 最大宽度：`Max Width(px)`
+- 核心方法：
+  - 形态学骨架提取（无额外依赖）
+  - 8 邻域骨架边长累计估算长度
+  - 距离变换估算局部最大厚度（`2 * max(distance)`）作为最大宽度
+  - 加入 `minAreaRect` 回退，提升异常形状下鲁棒性
+
+3. 前端结果展示：
+- 表格新增列：
+  - `Mask Area(px^2)`、`Length(px)`、`Max Width(px)`
+  - `Length(<unit>)`、`Max Width(<unit>)`
+- 摘要区增加测量统计（可显示平均长度和平均最大宽度，按单位输出）。
+
+4. 校验：
+- 已执行 `python -m py_compile app.py`，通过。
+- 已执行 `python scripts/eval_test_set.py --help`，通过（参数可正常展示）。
+
+## 本轮已落地（test分割mask生成支持，2026-04-12）
+1. `auto_annotate_sam.py` 扩展 test split：
+- `SPLIT_ALIASES` 新增 `"test": ("test",)`。
+- 新增 `TARGET_SPLITS = ("train", "val", "test")` 并用于主循环。
+
+2. 效果：
+- 可直接按已有 YOLO 检测框标签为 `test` 生成 SAM 分割标签，便于后续 `split=test` 的分割评估。
+
+3. 校验：
+- 已执行 `python -m py_compile auto_annotate_sam.py`，通过。
+- 已执行 `python -m py_compile app.py scripts/eval_test_set.py auto_annotate_sam.py train.py train_seg.py`，通过。
+
+## 下一小阶段计划（2026-04-12，更新）
+1. 给出 `test` 全流程命令模板（检测评估、test mask 生成、分割评估、前端启动）。
+2. 如需，再按你的实际权重路径代入并固化成一键脚本。
+
+## 本轮已落地（独立中文前端，仅det/seg，2026-04-12）
+1. 新增独立前端文件（不使用原 `app.py`）：
+- `app_cn_det_seg.py`
+
+2. 功能范围（按需求仅保留两类任务）：
+- 任务仅有 `det` 和 `seg`。
+- 中文界面：参数区、图像结果页、实例结果明细页。
+- 支持模型扫描、下拉选择、自定义路径加载、路径校验。
+
+3. 推理与测量能力：
+- 单图上传后可做检测/分割推理并可视化。
+- 分割实例支持尺寸估算：
+  - 掩膜面积（px²）
+  - 病害长度（px）
+  - 最大宽度（px）
+- 支持像素-物理系数换算：
+  - `长度(物理)`、`最大宽度(物理)`、`单位`
+
+4. 校验：
+- 已执行 `python -m py_compile app_cn_det_seg.py`，通过。
+
+## 变更记录（增量）
+- 2026-04-12：新增 `app_cn_det_seg.py`，构建不依赖原 `app.py` 的中文前端，且任务限制为 `det/seg`。
+
+## 本轮修正（代码英文命名，界面中文，2026-04-12）
+1. 按要求重写 `app_cn_det_seg.py`：
+- Python 代码中的类名、函数名、变量名全部改为英文命名。
+- 界面展示文本保持中文。
+
+2. 功能保持不变：
+- 任务仅 `det/seg`。
+- 图片上传推理、模型选择/路径校验、检测结果表格输出。
+- 分割掩膜尺寸估算（长度、最大宽度）与像素-物理换算。
+
+3. 校验：
+- 已执行 `python -m py_compile app_cn_det_seg.py`，通过。

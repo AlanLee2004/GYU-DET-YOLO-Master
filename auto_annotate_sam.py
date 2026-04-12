@@ -16,7 +16,9 @@ DEVICE = ""  # "", "cpu", "0"
 SPLIT_ALIASES = {
     "train": ("train",),
     "val": ("val", "valid"),
+    "test": ("test",),
 }
+TARGET_SPLITS = ("train", "val", "test")
 BACKUP_DET_LABELS = True
 REPLACE_LABELS_WITH_SEG = True
 
@@ -121,7 +123,7 @@ def force_bbox_to_segment(images_dir: Path, output_dir: Path, sam_model_name: st
 def main() -> None:
     data_cfg = YAML.load(DATA_CFG)
 
-    for split in ("train", "val"):
+    for split in TARGET_SPLITS:
         split_key, split_path = get_split_path(data_cfg, split)
         if not split_path:
             print(f"[WARN] Split '{split}' is not defined in {DATA_CFG}, skip.")
